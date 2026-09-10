@@ -65,13 +65,25 @@ class GameScene extends Phaser.Scene {
         // Load active character multipliers
         this.applyCharacterStats();
 
-        // 1. Background Environment (Scrolling Neon Track & Skyline)
-        this.skyline = this.add.tileSprite(width / 2, 80, width, 160, 'side_buildings');
-        this.track = this.add.tileSprite(width / 2, height / 2, width, height, 'track_tile');
+        // 1. Static 3-Lane Track Bed & Outer Rails (Completely fixed width, no zoom)
+        this.bg = this.add.rectangle(width / 2, height / 2, width, height, 0x0a0a14).setDepth(0);
+        this.roadBed = this.add.rectangle(width / 2, height / 2, 380, height, 0x0f1123).setDepth(1);
 
-        // Track Rail Glow lines
-        this.leftGlow = this.add.rectangle(50, height / 2, 4, height, 0xff007f, 0.4);
-        this.rightGlow = this.add.rectangle(430, height / 2, 4, height, 0xff007f, 0.4);
+        // Static Outer Neon Rails (Fixed pink borders at X=50 and X=430)
+        this.leftRail = this.add.rectangle(50, height / 2, 4, height, 0xff007f).setDepth(2);
+        this.rightRail = this.add.rectangle(430, height / 2, 4, height, 0xff007f).setDepth(2);
+
+        // Static Lane Dividers (Dashed Cyan Lines between Left/Center at X=178 and Center/Right at X=298)
+        this.laneDivider1 = this.add.grid(178, height / 2, 4, height, 4, 32, 0x000000, 0, 0x00e5ff, 0.45).setDepth(2);
+        this.laneDivider2 = this.add.grid(298, height / 2, 4, height, 4, 32, 0x000000, 0, 0x00e5ff, 0.45).setDepth(2);
+
+        // Moving Track Ties (Constant fixed width 376px, moving down in Y)
+        this.speedTies = [];
+        const numTies = 18;
+        for (let i = 0; i < numTies; i++) {
+            const tie = this.add.rectangle(width / 2, i * 42, 376, 2, 0x00e5ff, 0.15).setDepth(2);
+            this.speedTies.push(tie);
+        }
 
         // 2. Physics Groups
         this.obstacles = this.physics.add.group();
@@ -467,8 +479,15 @@ class GameScene extends Phaser.Scene {
         this.distText.setText(`DIST: ${Math.floor(this.distance)}m`);
         this.coinText.setText(`${this.coinsCollected}`);
 
-        // Pure vertical track scrolling (no horizontal shifting or zooming)
-        this.track.tilePositionY -= this.gameSpeed * dt;
+        // Pure vertical track speed ties scroll (strictly static width, zero zoom)
+        if (this.speedTies) {
+            this.speedTies.forEach(tie => {
+                tie.y += this.gameSpeed * dt;
+                if (tie.y > 730) {
+                    tie.y -= 756;
+                }
+            });
+        }
 
         // 2. Manage Active Power-Up Timers
         let hasPowerUpChange = false;
