@@ -137,12 +137,12 @@
                 <!-- Phaser Canvas Mount Point -->
                 <div id="phaser-game-container"></div>
 
-                <!-- Mobile Onscreen Touch Controls -->
+                <!-- Interactive Onscreen Arcade Controls -->
                 <div class="mobile-controls-bar">
-                    <button class="touch-btn" onclick="simulateKey('ArrowLeft')">◀</button>
-                    <button class="touch-btn" onclick="simulateKey('ArrowUp')">▲</button>
-                    <button class="touch-btn" onclick="simulateKey('ArrowDown')">▼</button>
-                    <button class="touch-btn" onclick="simulateKey('ArrowRight')">▶</button>
+                    <button class="touch-btn" id="btn-ctrl-left" onclick="triggerGameAction('left')">◀ LEFT (A)</button>
+                    <button class="touch-btn" id="btn-ctrl-jump" onclick="triggerGameAction('jump')">▲ JUMP (W)</button>
+                    <button class="touch-btn" id="btn-ctrl-slide" onclick="triggerGameAction('slide')">▼ SLIDE (S)</button>
+                    <button class="touch-btn" id="btn-ctrl-right" onclick="triggerGameAction('right')">▶ RIGHT (D)</button>
                 </div>
             </div>
 
@@ -387,15 +387,43 @@
             }, 3000);
         }
 
-        // Simulate Key on Mobile Buttons
-        function simulateKey(keyCode) {
+        // Unified Game Action Trigger (Keyboard, Mouse clicks, Touch taps)
+        function triggerGameAction(action) {
+            if (window.soundEngine) window.soundEngine.resume();
             if (window.game && window.game.scene) {
                 const gameScene = window.game.scene.getScene('GameScene');
-                if (gameScene && gameScene.handleKeyDown) {
-                    gameScene.handleKeyDown({ code: keyCode });
+                if (gameScene && gameScene.scene.isActive()) {
+                    if (action === 'left') gameScene.moveLeft();
+                    else if (action === 'right') gameScene.moveRight();
+                    else if (action === 'jump') gameScene.jump();
+                    else if (action === 'slide') gameScene.slide();
                 }
             }
         }
+
+        // Global Window Keyboard Listener
+        window.addEventListener('keydown', (e) => {
+            // Do not intercept if user is typing in form inputs or modals
+            const tag = (document.activeElement && document.activeElement.tagName) || '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+            const code = e.code || '';
+            const key = (e.key || '').toLowerCase();
+
+            if (code === 'ArrowLeft' || code === 'KeyA' || key === 'arrowleft' || key === 'a') {
+                e.preventDefault();
+                triggerGameAction('left');
+            } else if (code === 'ArrowRight' || code === 'KeyD' || key === 'arrowright' || key === 'd') {
+                e.preventDefault();
+                triggerGameAction('right');
+            } else if (code === 'ArrowUp' || code === 'KeyW' || code === 'Space' || key === 'arrowup' || key === 'w' || key === ' ') {
+                e.preventDefault();
+                triggerGameAction('jump');
+            } else if (code === 'ArrowDown' || code === 'KeyS' || key === 'arrowdown' || key === 's') {
+                e.preventDefault();
+                triggerGameAction('slide');
+            }
+        }, { passive: false });
 
         // Auth Form Handlers
         async function handleLoginSubmit(e) {

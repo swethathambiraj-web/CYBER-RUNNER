@@ -1,5 +1,6 @@
 /**
  * GameScene: Core 3-Lane Endless Runner Engine (Phaser 3)
+ * Full support for Left/Right Lane switching, Jump (arc & hurdle immunity), and Slide (crouch & laser immunity).
  */
 class GameScene extends Phaser.Scene {
     constructor() {
@@ -7,7 +8,7 @@ class GameScene extends Phaser.Scene {
     }
 
     init() {
-        // 3 Distinct Lanes (Center X = 240 in 480px width)
+        // 3 Distinct Lanes (Width = 480: Left = 120, Center = 240, Right = 360)
         this.laneX = [120, 240, 360];
         this.currentLane = 1; // Start in Center lane
         this.playerBaseY = 620;
@@ -17,7 +18,8 @@ class GameScene extends Phaser.Scene {
         this.isSliding = false;
         this.isInvulnerable = false;
         this.isDead = false;
-        this.jumpOffsetY = 0;
+        this.playerJumpObj = { elevation: 0 };
+        this.slideTimerEvent = null;
 
         // Run Metrics
         this.distance = 0;
@@ -44,11 +46,9 @@ class GameScene extends Phaser.Scene {
         this.obstacles = null;
         this.coins = null;
         this.powerupItems = null;
-        this.lastSpawnY = 0;
         this.spawnTimer = 0;
-        this.minSpawnGap = 240; // minimum vertical px between obstacle rows
 
-        // Swipe touch tracking
+        // Touch tracking
         this.touchStartX = 0;
         this.touchStartY = 0;
         this.touchStartTime = 0;
@@ -85,8 +85,8 @@ class GameScene extends Phaser.Scene {
             `runner_${this.activeCharacterSlug}_run_0`
         ).setDepth(20);
 
-        this.player.setSize(36, 56);
-        this.player.setOffset(9, 12);
+        this.player.setSize(34, 52);
+        this.player.setOffset(10, 14);
         this.player.play(`run_${this.activeCharacterSlug}`);
 
         // Auras & Visual Attachments
@@ -95,7 +95,7 @@ class GameScene extends Phaser.Scene {
             .setVisible(false)
             .setAlpha(0.85);
 
-        this.magnetAura = this.add.circle(this.player.x, this.player.y, 42, 0x00e5ff, 0.15)
+        this.magnetAura = this.add.circle(this.player.x, this.player.y, 44, 0x00e5ff, 0.15)
             .setStrokeStyle(2, 0x00e5ff, 0.6)
             .setDepth(15)
             .setVisible(false);
@@ -117,17 +117,11 @@ class GameScene extends Phaser.Scene {
             emitting: false,
         }).setDepth(22);
 
-        // 4. Input Listeners (Keyboard + Swipe + Buttons)
-        this.cursors = this.input.keyboard.createCursorKeys();
-        this.wasd = this.input.keyboard.addKeys({
-            up: Phaser.Input.Keyboard.KeyCodes.W,
-            down: Phaser.Input.Keyboard.KeyCodes.S,
-            left: Phaser.Input.Keyboard.KeyCodes.A,
-            right: Phaser.Input.Keyboard.KeyCodes.D,
-            space: Phaser.Input.Keyboard.KeyCodes.SPACE,
-        });
-
-        this.input.keyboard.on('keydown', this.handleKeyDown, this);
+        // 4. Input Listeners (Keyboard + Swipe)
+        if (this.input.keyboard) {
+            this.input.keyboard.addCapture(['UP', 'DOWN', 'LEFT', 'RIGHT', 'SPACE', 'W', 'A', 'S', 'D']);
+            this.input.keyboard.on('keydown', this.handleKeyDown, this);
+        }
         this.setupTouchControls();
 
         // 5. HUD Overlay
@@ -148,7 +142,7 @@ class GameScene extends Phaser.Scene {
             if (e.detail && e.detail.slug) {
                 this.activeCharacterSlug = e.detail.slug;
                 this.applyCharacterStats();
-                if (!this.isJumping && !this.isSliding) {
+                if (!this.isJumping && !this.isSliding && !this.isDead) {
                     this.player.play(`run_${this.activeCharacterSlug}`);
                 }
             }
@@ -182,13 +176,24 @@ class GameScene extends Phaser.Scene {
             const duration = pointer.upTime - this.touchStartTime;
 
             // Swipe threshold
-            if (dist > 30 && duration < 500) {
+            if (dist > 25 && duration < 600) {
                 if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                    if (deltaX > 0) this.switchLane(1);
-                    else this.switchLane(-1);
+                    if (deltaX > 0) this.moveRight();
+                    else this.moveLeft();
                 } else {
                     if (deltaY < 0) this.jump();
                     else this.slide();
+                }
+            } else if (dist <= 25) {
+                // Direct tap on screen zones
+                if (pointer.y < 240) {
+                    this.jump();
+                } else if (pointer.y > 560) {
+                    this.slide();
+                } else if (pointer.x < 240) {
+                    this.moveLeft();
+                } else {
+                    this.moveRight();
                 }
             }
         });
@@ -197,72 +202,71 @@ class GameScene extends Phaser.Scene {
     handleKeyDown(event) {
         if (this.isDead) return;
 
-        switch (event.code) {
-            case 'ArrowLeft':
-            case 'KeyA':
-                this.switchLane(-1);
-                break;
-            case 'ArrowRight':
-            case 'KeyD':
-                this.switchLane(1);
-                break;
-            case 'ArrowUp':
-            case 'KeyW':
-            case 'Space':
-                this.jump();
-                break;
-            case 'ArrowDown':
-            case 'KeyS':
-                this.slide();
-                break;
+        const code = event.code || '';
+        const key = (event.key || '').toLowerCase();
+
+        if (code === 'ArrowLeft' || code === 'KeyA' || key === 'arrowleft' || key === 'a') {
+            if (event.preventDefault) event.preventDefault();
+            this.moveLeft();
+        } else if (code === 'ArrowRight' || code === 'KeyD' || key === 'arrowright' || key === 'd') {
+            if (event.preventDefault) event.preventDefault();
+            this.moveRight();
+        } else if (code === 'ArrowUp' || code === 'KeyW' || code === 'Space' || key === 'arrowup' || key === 'w' || key === ' ') {
+            if (event.preventDefault) event.preventDefault();
+            this.jump();
+        } else if (code === 'ArrowDown' || code === 'KeyS' || key === 'arrowdown' || key === 's') {
+            if (event.preventDefault) event.preventDefault();
+            this.slide();
         }
+    }
+
+    moveLeft() {
+        this.switchLane(-1);
+    }
+
+    moveRight() {
+        this.switchLane(1);
     }
 
     switchLane(direction) {
         if (this.isDead) return;
 
         const targetLane = Phaser.Math.Clamp(this.currentLane + direction, 0, 2);
-        if (targetLane !== this.currentLane) {
-            this.currentLane = targetLane;
-            const targetX = this.laneX[this.currentLane];
+        if (targetLane === this.currentLane) return;
 
-            if (window.soundEngine) window.soundEngine.playLaneSwitch();
+        this.currentLane = targetLane;
+        const targetX = this.laneX[this.currentLane];
 
-            // Character lane tilt tween
-            const tiltAngle = direction * 12;
-            this.tweens.killTweensOf(this.player);
-            this.tweens.killTweensOf(this.playerShadow);
+        if (window.soundEngine) window.soundEngine.playLaneSwitch();
 
-            this.tweens.add({
-                targets: this.player,
-                x: targetX,
-                angle: tiltAngle,
-                duration: 130,
-                ease: 'Sine.easeOut',
-                onComplete: () => {
-                    this.tweens.add({
-                        targets: this.player,
-                        angle: 0,
-                        duration: 80,
-                        ease: 'Sine.easeIn',
-                    });
-                },
-            });
+        // Kill existing horizontal tweens
+        this.tweens.killTweensOf(this.player, ['x', 'angle']);
+        this.tweens.killTweensOf(this.playerShadow, ['x']);
 
-            this.tweens.add({
-                targets: this.playerShadow,
-                x: targetX,
-                duration: 130,
-                ease: 'Sine.easeOut',
-            });
-        }
+        // Snappy, responsive lane tween with subtle tilt
+        this.player.angle = direction * 10;
+
+        this.tweens.add({
+            targets: this.player,
+            x: targetX,
+            angle: 0,
+            duration: 110,
+            ease: 'Sine.easeOut',
+        });
+
+        this.tweens.add({
+            targets: this.playerShadow,
+            x: targetX,
+            duration: 110,
+            ease: 'Sine.easeOut',
+        });
     }
 
     jump() {
         if (this.isDead) return;
         if (this.isJumping) return;
 
-        // Cancel slide if currently sliding
+        // Cancel slide immediately if currently sliding
         if (this.isSliding) {
             this.stopSlide();
         }
@@ -274,26 +278,27 @@ class GameScene extends Phaser.Scene {
         this.player.setTexture(`runner_${this.activeCharacterSlug}_jump`);
         this.player.anims.stop();
 
-        // Jump physics arc (Z-elevation simulation)
-        const jumpHeight = 90;
-        const jumpDuration = 320; // ms up, 320ms down
+        // Smooth elevation arc (110px peak)
+        const jumpHeight = 110;
+        const jumpDuration = 280; // 280ms up, 280ms down
 
-        this.tweens.add({
-            targets: this,
-            jumpOffsetY: jumpHeight,
+        this.tweens.killTweensOf(this.playerJumpObj);
+        this.playerJumpObj = { elevation: 0 };
+
+        this.jumpTween = this.tweens.add({
+            targets: this.playerJumpObj,
+            elevation: jumpHeight,
             duration: jumpDuration,
-            ease: 'Quad.easeOut',
+            ease: 'Sine.easeOut',
             yoyo: true,
             onUpdate: () => {
-                this.player.y = this.playerBaseY - this.jumpOffsetY;
-                // Shadow contracts slightly while in the air
-                const shadowScale = 1 - (this.jumpOffsetY / jumpHeight) * 0.45;
+                this.player.y = this.playerBaseY - this.playerJumpObj.elevation;
+                const shadowScale = Math.max(0.4, 1 - (this.playerJumpObj.elevation / jumpHeight) * 0.5);
                 this.playerShadow.setScale(shadowScale);
                 this.playerShadow.setAlpha(0.6 * shadowScale);
             },
             onComplete: () => {
                 this.isJumping = false;
-                this.jumpOffsetY = 0;
                 this.player.y = this.playerBaseY;
                 this.playerShadow.setScale(1);
                 this.playerShadow.setAlpha(0.6);
@@ -307,16 +312,15 @@ class GameScene extends Phaser.Scene {
     slide() {
         if (this.isDead) return;
 
-        // If currently in air, perform fast dive
+        // Fast dive if currently airborne in jump
         if (this.isJumping) {
-            this.tweens.killTweensOf(this);
-            this.jumpOffsetY = 0;
+            if (this.jumpTween) this.jumpTween.stop();
+            this.isJumping = false;
+            this.playerJumpObj.elevation = 0;
             this.player.y = this.playerBaseY;
             this.playerShadow.setScale(1);
-            this.isJumping = false;
+            this.playerShadow.setAlpha(0.6);
         }
-
-        if (this.isSliding) return;
 
         this.isSliding = true;
         if (window.soundEngine) window.soundEngine.playSlide();
@@ -324,15 +328,20 @@ class GameScene extends Phaser.Scene {
         // Switch texture to low-profile crouch/slide
         this.player.setTexture(`runner_${this.activeCharacterSlug}_slide`);
         this.player.anims.stop();
-        this.player.setSize(48, 28);
-        this.player.setOffset(8, 12);
-        this.player.y = this.playerBaseY + 12;
+        this.player.setSize(48, 26);
+        this.player.setOffset(8, 14);
+        this.player.y = this.playerBaseY + 8;
 
         // Emit slide sparks
-        this.sparkParticles.emitParticleAt(this.player.x, this.player.y + 16, 8);
+        this.sparkParticles.emitParticleAt(this.player.x, this.player.y + 14, 8);
 
-        // Auto restore after 650ms
-        this.time.delayedCall(650, () => {
+        // Reset any existing slide timer
+        if (this.slideTimerEvent) {
+            this.slideTimerEvent.remove(false);
+        }
+
+        // Restore running stance after 550ms
+        this.slideTimerEvent = this.time.delayedCall(550, () => {
             if (this.isSliding && !this.isDead) {
                 this.stopSlide();
             }
@@ -341,8 +350,12 @@ class GameScene extends Phaser.Scene {
 
     stopSlide() {
         this.isSliding = false;
-        this.player.setSize(36, 56);
-        this.player.setOffset(9, 12);
+        if (this.slideTimerEvent) {
+            this.slideTimerEvent.remove(false);
+            this.slideTimerEvent = null;
+        }
+        this.player.setSize(34, 52);
+        this.player.setOffset(10, 14);
         this.player.y = this.playerBaseY;
         if (!this.isJumping && !this.isDead) {
             this.player.play(`run_${this.activeCharacterSlug}`);
@@ -421,7 +434,7 @@ class GameScene extends Phaser.Scene {
     }
 
     spawnInitialTrack() {
-        // Spawn starter coins
+        // Starter coins in center lane
         for (let i = 0; i < 3; i++) {
             this.spawnCoin(1, -150 - i * 60);
         }
@@ -595,21 +608,21 @@ class GameScene extends Phaser.Scene {
     spawnObstacle(laneIdx, yPos, type) {
         const x = this.laneX[laneIdx];
         let textureKey = 'obstacle_hurdle';
-        let bodyW = 76;
-        let bodyH = 34;
+        let bodyW = 70;
+        let bodyH = 30;
 
         if (type === 'laser_high') {
             textureKey = 'obstacle_laser_high';
-            bodyW = 76;
-            bodyH = 36;
+            bodyW = 70;
+            bodyH = 32;
         } else if (type === 'train') {
             textureKey = 'obstacle_train';
-            bodyW = 76;
-            bodyH = 110;
+            bodyW = 70;
+            bodyH = 100;
         } else if (type === 'gap') {
             textureKey = 'obstacle_gap';
-            bodyW = 76;
-            bodyH = 38;
+            bodyW = 70;
+            bodyH = 34;
         }
 
         const obs = this.physics.add.sprite(x, yPos, textureKey);
@@ -619,10 +632,9 @@ class GameScene extends Phaser.Scene {
         obs.setSize(bodyW, bodyH);
 
         if (type === 'laser_high') {
-            // High laser obstacle hitbox is at top overhead beam
-            obs.setOffset(6, 4);
+            obs.setOffset(9, 6);
         } else {
-            obs.setOffset(6, 6);
+            obs.setOffset(9, 8);
         }
 
         this.obstacles.add(obs);
@@ -710,7 +722,7 @@ class GameScene extends Phaser.Scene {
         });
 
         // 3. Obstacle Collisions
-        if (!this.isInvulnerable) {
+        if (!this.isInvulnerable && !this.isDead) {
             this.physics.overlap(this.player, this.obstacles, (player, obs) => {
                 this.handleObstacleCollision(obs);
             });
@@ -726,21 +738,22 @@ class GameScene extends Phaser.Scene {
             return;
         }
 
-        // Check if safely cleared by Jump or Slide
         const type = obs.obstacleType;
 
-        if (type === 'hurdle' || type === 'gap') {
-            if (this.isJumping && this.jumpOffsetY > 35) {
-                // Safely jumped over hurdle/gap!
-                return;
-            }
+        // If obstacle is hurdle or gap AND player is jumping -> completely immune!
+        if ((type === 'hurdle' || type === 'gap') && this.isJumping) {
+            return;
         }
 
-        if (type === 'laser_high') {
-            if (this.isSliding) {
-                // Safely slid under laser beam!
-                return;
-            }
+        // If obstacle is laser_high AND player is sliding -> completely immune!
+        if (type === 'laser_high' && this.isSliding) {
+            return;
+        }
+
+        // Forgiving lane edge check
+        const xDiff = Math.abs(this.player.x - obs.x);
+        if (xDiff > 42) {
+            return;
         }
 
         // Fatal Hit Handling
@@ -814,7 +827,7 @@ class GameScene extends Phaser.Scene {
         this.cameras.main.shake(350, 0.035);
         this.sparkParticles.emitParticleAt(this.player.x, this.player.y, 25);
 
-        // Player Death Animation (knockback and red flash)
+        // Player Death Animation
         this.tweens.killTweensOf(this.player);
         this.player.setTint(0xff0055);
 
