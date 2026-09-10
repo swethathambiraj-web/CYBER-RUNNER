@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CYBER RUNNER - 3-Lane Endless Arcade Game</title>
+    <meta name="description" content="Play Cyber Runner, an endless 3-lane browser arcade runner powered by Phaser.js and Django REST API. Jump, slide, dodge obstacles, collect coins, and unlock cyberpunk characters!">
+    
+    <!-- Google Fonts & Stylesheet -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    
+    <!-- Phaser 3 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+</head>
+<body>
+
+    <!-- ==========================================
+         TOP ARCADE NAVBAR
+         ========================================== -->
+    <header class="arcade-header">
+        <div class="header-container">
+            <a href="/" class="logo-area">
+                <span class="logo-icon">⚡</span>
+                <div>
+                    <span class="logo-title">CYBER RUNNER</span>
+                    <span class="logo-badge">3D ARCADE</span>
+                </div>
+            </a>
+
+            <!-- User Stat Badges -->
+            <div class="user-stats-bar" id="user-stats-bar">
+                <div class="stat-item" title="Your Bank Coins">
+                    <span>🪙</span>
+                    <span class="stat-coin-value" id="header-coins-val">0</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item" title="Personal Best Score">
+                    <span>🏆</span>
+                    <span class="stat-score-value" id="header-highscore-val">0</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item" id="header-user-status">
+                    <span style="color: var(--text-muted);">Guest Runner</span>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="nav-actions">
+                <button class="btn btn-ghost" id="nav-shop-btn" onclick="openShopModal()">
+                    <span>🛍️</span> Shop
+                </button>
+                <button class="btn btn-ghost" id="nav-leaderboard-btn" onclick="openLeaderboardModal()">
+                    <span>📊</span> Ranks
+                </button>
+                <button class="btn btn-primary" id="nav-auth-btn" onclick="openAuthModal('login')">
+                    <span>🔑</span> Login
+                </button>
+                <button class="btn btn-ghost btn-icon" id="audio-toggle-btn" title="Toggle Sound" onclick="toggleAudio()">
+                    🔊
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ==========================================
+         MAIN GAME & ARENA PANELS
+         ========================================== -->
+    <main class="main-content">
+        <div class="game-arena-wrapper">
+            
+            <!-- Left Panel: Controls & Instructions -->
+            <aside class="side-panel">
+                <div class="panel-card">
+                    <h3 class="panel-title">🎮 CONTROLS</h3>
+                    <div class="keybind-list">
+                        <div class="keybind-row">
+                            <span class="key-badge">← / A</span>
+                            <span class="key-action">Move Left Lane</span>
+                        </div>
+                        <div class="keybind-row">
+                            <span class="key-badge">→ / D</span>
+                            <span class="key-action">Move Right Lane</span>
+                        </div>
+                        <div class="keybind-row">
+                            <span class="key-badge">↑ / W / Space</span>
+                            <span class="key-action">Jump Over Hurdles</span>
+                        </div>
+                        <div class="keybind-row">
+                            <span class="key-badge">↓ / S</span>
+                            <span class="key-action">Slide Under Lasers</span>
+                        </div>
+                        <div class="keybind-row">
+                            <span class="key-badge">Touch / Swipe</span>
+                            <span class="key-action">Full Gesture Support</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-card">
+                    <h3 class="panel-title">⚡ POWER-UPS</h3>
+                    <div class="powerup-pill-grid">
+                        <div class="powerup-pill">
+                            <div class="powerup-pill-header" style="color: #00e5ff;">
+                                <span>🧲</span> Magnet
+                            </div>
+                            <div class="powerup-pill-desc">Auto-pulls all coins</div>
+                        </div>
+                        <div class="powerup-pill">
+                            <div class="powerup-pill-header" style="color: #00ffaa;">
+                                <span>🛡️</span> Shield
+                            </div>
+                            <div class="powerup-pill-desc">Absorbs 1 obstacle hit</div>
+                        </div>
+                        <div class="powerup-pill">
+                            <div class="powerup-pill-header" style="color: #ff9900;">
+                                <span>🚀</span> Nitro Boost
+                            </div>
+                            <div class="powerup-pill-desc">Smashes obstacles</div>
+                        </div>
+                        <div class="powerup-pill">
+                            <div class="powerup-pill-header" style="color: #ff007f;">
+                                <span>✨</span> 2X Score
+                            </div>
+                            <div class="powerup-pill-desc">Doubles all points</div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Center: Arcade Cabinet Phaser Viewport -->
+            <div class="arcade-cabinet">
+                <div class="arcade-top-bar">
+                    <span><span class="status-dot"></span> LIVE RUNNER ENGINE</span>
+                    <span id="active-char-banner">RUNNER: RETRO DASH</span>
+                </div>
+                
+                <!-- Phaser Canvas Mount Point -->
+                <div id="phaser-game-container"></div>
+
+                <!-- Mobile Onscreen Touch Controls -->
+                <div class="mobile-controls-bar">
+                    <button class="touch-btn" onclick="simulateKey('ArrowLeft')">◀</button>
+                    <button class="touch-btn" onclick="simulateKey('ArrowUp')">▲</button>
+                    <button class="touch-btn" onclick="simulateKey('ArrowDown')">▼</button>
+                    <button class="touch-btn" onclick="simulateKey('ArrowRight')">▶</button>
+                </div>
+            </div>
+
+            <!-- Right Panel: Live Top Ranks Preview -->
+            <aside class="side-panel">
+                <div class="panel-card">
+                    <h3 class="panel-title">🏆 TOP RUNNERS</h3>
+                    <table class="leaderboard-table" id="sidebar-leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Player</th>
+                                <th style="text-align: right;">Score</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sidebar-leaderboard-body">
+                            <tr>
+                                <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 16px;">
+                                    Loading top scores...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <button class="btn btn-ghost" style="width: 100%; margin-top: 14px; justify-content: center;" onclick="openLeaderboardModal()">
+                        View Full Global Board →
+                    </button>
+                </div>
+
+                <div class="panel-card" style="text-align: center;">
+                    <h3 class="panel-title" style="justify-content: center;">🛍️ CHARACTER LOCKER</h3>
+                    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+                        Collect coins during your runs to unlock cyberpunk speedsters with custom multipliers!
+                    </p>
+                    <button class="btn btn-neon" style="width: 100%; justify-content: center;" onclick="openShopModal()">
+                        Open Character Shop 🚀
+                    </button>
+                </div>
+            </aside>
+
+        </div>
+    </main>
+
+    <!-- ==========================================
+         MODAL: SHOP / CHARACTER SELECTOR
+         ========================================== -->
+    <div class="modal-overlay" id="shop-modal">
+        <div class="modal-card" style="max-width: 680px;">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span>🛍️</span> CHARACTER LOCKER & SHOP
+                </div>
+                <button class="modal-close" onclick="closeModal('shop-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; background: rgba(0,0,0,0.25); padding: 10px 16px; border-radius: var(--radius-sm);">
+                    <span style="font-size: 14px; color: var(--text-muted);">Your Bank Coins:</span>
+                    <span style="font-size: 18px; font-weight: 800; color: var(--neon-gold);" id="shop-coin-balance">0 🪙</span>
+                </div>
+                <div class="shop-grid" id="shop-grid-container">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         MODAL: GLOBAL LEADERBOARD
+         ========================================== -->
+    <div class="modal-overlay" id="leaderboard-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span>🏆</span> GLOBAL HALL OF FAME
+                </div>
+                <button class="modal-close" onclick="closeModal('leaderboard-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <table class="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Runner</th>
+                            <th>Coins</th>
+                            <th>Dist</th>
+                            <th style="text-align: right;">Score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modal-leaderboard-body">
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">
+                                Fetching global high scores...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         MODAL: AUTH (LOGIN / REGISTER)
+         ========================================== -->
+    <div class="modal-overlay" id="auth-modal">
+        <div class="modal-card" style="max-width: 420px;">
+            <div class="modal-header">
+                <div class="modal-title" id="auth-modal-title">
+                    <span>🔑</span> PLAYER SIGN IN
+                </div>
+                <button class="modal-close" onclick="closeModal('auth-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Tabs -->
+                <div class="auth-tabs">
+                    <button class="auth-tab-btn active" id="tab-login-btn" onclick="switchAuthTab('login')">Login</button>
+                    <button class="auth-tab-btn" id="tab-signup-btn" onclick="switchAuthTab('signup')">Create Account</button>
+                </div>
+
+                <!-- Login Form -->
+                <form id="login-form" onsubmit="handleLoginSubmit(event)">
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-input" id="login-username" placeholder="Enter your username" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-input" id="login-password" placeholder="Enter password" required>
+                    </div>
+                    <div class="form-error" id="login-error"></div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 10px;">
+                        Sign In
+                    </button>
+                </form>
+
+                <!-- Signup Form -->
+                <form id="signup-form" style="display: none;" onsubmit="handleSignupSubmit(event)">
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-input" id="signup-username" placeholder="Pick a runner codename" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Email (Optional)</label>
+                        <input type="email" class="form-input" id="signup-email" placeholder="runner@domain.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-input" id="signup-password" placeholder="Choose a password" required minlength="4">
+                    </div>
+                    <div class="form-error" id="signup-error"></div>
+                    <button type="submit" class="btn btn-neon" style="width: 100%; justify-content: center; margin-top: 10px;">
+                        Create Account & Claim 100 🪙
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- ==========================================
+         SCRIPTS INCLUSION
+         ========================================== -->
+    <script src="/static/js/game/audio.js"></script>
+    <script src="/static/js/game/textures.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/game/scenes/BootScene.js"></script>
+    <script src="/static/js/game/scenes/GameScene.js"></script>
+    <script src="/static/js/game/scenes/GameOverScene.js"></script>
+    <script src="/static/js/game/main.js"></script>
+
+    <!-- UI Controller Script -->
+    <script>
+        // Modal Handlers
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) modal.classList.add('active');
+            if (window.soundEngine) window.soundEngine.playClick();
+        }
+
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) modal.classList.remove('active');
+        }
+
+        window.openShopModal = async function() {
+            openModal('shop-modal');
+            await refreshShopList();
+        };
+
+        window.openLeaderboardModal = async function() {
+            openModal('leaderboard-modal');
+            await refreshLeaderboard();
+        };
+
+        window.openAuthModal = function(tab = 'login') {
+            openModal('auth-modal');
+            switchAuthTab(tab);
+        };
+
+        function switchAuthTab(tab) {
+            const loginForm = document.getElementById('login-form');
+            const signupForm = document.getElementById('signup-form');
+            const tabLogin = document.getElementById('tab-login-btn');
+            const tabSignup = document.getElementById('tab-signup-btn');
+            const title = document.getElementById('auth-modal-title');
+
+            if (tab === 'login') {
+                loginForm.style.display = 'block';
+                signupForm.style.display = 'none';
+                tabLogin.classList.add('active');
+                tabSignup.classList.remove('active');
+                title.innerHTML = '<span>🔑</span> PLAYER SIGN IN';
+            } else {
+                loginForm.style.display = 'none';
+                signupForm.style.display = 'block';
+                tabLogin.classList.remove('active');
+                tabSignup.classList.add('active');
+                title.innerHTML = '<span>🚀</span> CREATE RUNNER ACCOUNT';
+            }
+        }
+
+        // Audio Toggle
+        function toggleAudio() {
+            if (window.soundEngine) {
+                const muted = window.soundEngine.toggleMute();
+                const btn = document.getElementById('audio-toggle-btn');
+                btn.textContent = muted ? '🔇' : '🔊';
+                showToast(muted ? 'Audio Muted' : 'Audio Enabled');
+            }
+        }
+
+        // Toasts
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type === 'error' ? 'toast-error' : (type === 'success' ? 'toast-success' : '')}`;
+            toast.innerHTML = `<span>${type === 'error' ? '⚠️' : (type === 'success' ? '🎉' : '🔔')}</span> ${message}`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Simulate Key on Mobile Buttons
+        function simulateKey(keyCode) {
+            if (window.game && window.game.scene) {
+                const gameScene = window.game.scene.getScene('GameScene');
+                if (gameScene && gameScene.handleKeyDown) {
+                    gameScene.handleKeyDown({ code: keyCode });
+                }
+            }
+        }
+
+        // Auth Form Handlers
+        async function handleLoginSubmit(e) {
+            e.preventDefault();
+            const u = document.getElementById('login-username').value.trim();
+            const p = document.getElementById('login-password').value;
+            const errEl = document.getElementById('login-error');
+            errEl.style.display = 'none';
+
+            const res = await window.runnerApi.login(u, p);
+            if (res.success) {
+                closeModal('auth-modal');
+                showToast(`Welcome back, ${u}!`, 'success');
+                updateUIAuthState();
+                refreshLeaderboard();
+            } else {
+                errEl.textContent = typeof res.errors === 'string' ? res.errors : 'Invalid username or password';
+                errEl.style.display = 'block';
+            }
+        }
+
+        async function handleSignupSubmit(e) {
+            e.preventDefault();
+            const u = document.getElementById('signup-username').value.trim();
+            const em = document.getElementById('signup-email').value.trim();
+            const p = document.getElementById('signup-password').value;
+            const errEl = document.getElementById('signup-error');
+            errEl.style.display = 'none';
+
+            const res = await window.runnerApi.register(u, p, em);
+            if (res.success) {
+                closeModal('auth-modal');
+                showToast(`Account created! +100 Coins claimed!`, 'success');
+                updateUIAuthState();
+                refreshLeaderboard();
+            } else {
+                let msg = 'Registration failed';
+                if (typeof res.errors === 'object') {
+                    msg = Object.entries(res.errors).map(([k, v]) => `${k}: ${v}`).join(', ');
+                }
+                errEl.textContent = msg;
+                errEl.style.display = 'block';
+            }
+        }
+
+        async function handleLogout() {
+            await window.runnerApi.logout();
+            showToast('Logged out successfully');
+            updateUIAuthState();
+        }
+
+        // UI Auth State Syncer
+        function updateUIAuthState() {
+            const authBtn = document.getElementById('nav-auth-btn');
+            const userStatus = document.getElementById('header-user-status');
+            const coinsVal = document.getElementById('header-coins-val');
+            const highVal = document.getElementById('header-highscore-val');
+            const banner = document.getElementById('active-char-banner');
+
+            if (window.runnerApi.isAuthenticated() && window.runnerApi.user) {
+                const u = window.runnerApi.user.username;
+                authBtn.innerHTML = '<span>🚪</span> Logout';
+                authBtn.className = 'btn btn-ghost';
+                authBtn.onclick = handleLogout;
+
+                userStatus.innerHTML = `<span style="color: var(--neon-cyan); font-weight: 700;">👤 ${u}</span>`;
+                if (window.runnerApi.profile) {
+                    coinsVal.textContent = window.runnerApi.profile.total_coins || 0;
+                    highVal.textContent = window.runnerApi.profile.high_score || 0;
+                    if (window.runnerApi.profile.active_character_details) {
+                        banner.textContent = `RUNNER: ${window.runnerApi.profile.active_character_details.name.toUpperCase()}`;
+                    }
+                }
+            } else {
+                authBtn.innerHTML = '<span>🔑</span> Login';
+                authBtn.className = 'btn btn-primary';
+                authBtn.onclick = () => openAuthModal('login');
+                userStatus.innerHTML = '<span style="color: var(--text-muted);">Guest Runner</span>';
+            }
+        }
+
+        // Shop List Populator
+        async function refreshShopList() {
+            const container = document.getElementById('shop-grid-container');
+            const coinBalance = document.getElementById('shop-coin-balance');
+            const data = await window.runnerApi.getShopList();
+
+            if (!data.characters) return;
+
+            const userCoins = data.user_coins || 0;
+            coinBalance.textContent = `${userCoins} 🪙`;
+
+            const currentActiveSlug = window.runnerApi.getActiveCharacter();
+
+            container.innerHTML = data.characters.map(char => {
+                const isEquipped = char.slug === currentActiveSlug;
+                const isUnlocked = char.is_unlocked || char.cost === 0;
+
+                let actionHtml = '';
+                if (isEquipped) {
+                    actionHtml = `<button class="btn btn-ghost shop-action-btn" disabled style="border-color: var(--neon-green); color: var(--neon-green);">✓ EQUIPPED</button>`;
+                } else if (isUnlocked) {
+                    actionHtml = `<button class="btn btn-primary shop-action-btn" onclick="equipCharacter('${char.slug}')">EQUIP</button>`;
+                } else {
+                    const canAfford = userCoins >= char.cost;
+                    actionHtml = `<button class="btn btn-neon shop-action-btn" ${canAfford ? '' : 'disabled style="opacity:0.5;"'} onclick="unlockCharacter('${char.slug}')">UNLOCK (${char.cost} 🪙)</button>`;
+                }
+
+                return `
+                    <div class="shop-card ${isEquipped ? 'active-equipped' : ''}">
+                        ${isEquipped ? '<span class="shop-card-badge badge-equipped">Active</span>' : (isUnlocked ? '<span class="shop-card-badge badge-unlocked">Owned</span>' : '')}
+                        <div class="shop-card-icon">${char.icon_emoji}</div>
+                        <div class="shop-card-name" style="color: ${char.color_primary};">${char.name}</div>
+                        <div class="shop-card-desc">${char.description}</div>
+                        <div class="shop-perks-row">
+                            <span class="shop-perk-item perk-speed">⚡ ${(char.speed_multiplier * 100).toFixed(0)}% Spd</span>
+                            <span class="shop-perk-item perk-coins">🪙 ${(char.coin_multiplier * 100).toFixed(0)}% Coins</span>
+                        </div>
+                        ${actionHtml}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function unlockCharacter(slug) {
+            if (!window.runnerApi.isAuthenticated()) {
+                openAuthModal('signup');
+                showToast('Please create an account to unlock characters and save coins!', 'error');
+                return;
+            }
+            const res = await window.runnerApi.unlockCharacter(slug);
+            if (res.success) {
+                if (window.soundEngine) window.soundEngine.playUnlock();
+                showToast(res.data.message || 'Character Unlocked!', 'success');
+                await refreshShopList();
+                updateUIAuthState();
+            } else {
+                showToast(res.message, 'error');
+            }
+        }
+
+        async function equipCharacter(slug) {
+            await window.runnerApi.selectCharacter(slug);
+            if (window.soundEngine) window.soundEngine.playClick();
+            showToast('Character Equipped!', 'success');
+            await refreshShopList();
+            updateUIAuthState();
+        }
+
+        // Leaderboard Populator
+        async function refreshLeaderboard() {
+            const data = await window.runnerApi.getLeaderboard(10);
+            if (!data.leaderboard) return;
+
+            const sidebarTbody = document.getElementById('sidebar-leaderboard-body');
+            const modalTbody = document.getElementById('modal-leaderboard-body');
+
+            const rowsHtml = data.leaderboard.map((item, idx) => {
+                const rank = idx + 1;
+                const rankBadge = rank <= 3 ? `<span class="rank-pill rank-${rank}">${rank === 1 ? '🥇' : (rank === 2 ? '🥈' : '🥉')}</span>` : `<span class="rank-pill">${rank}</span>`;
+                const isMe = item.is_current_user ? 'current-user-row' : '';
+
+                return `
+                    <tr class="${isMe}">
+                        <td>${rankBadge}</td>
+                        <td>${item.character_icon} <strong>${item.player_name}</strong></td>
+                        <td style="color: var(--neon-gold);">${item.coins_collected}</td>
+                        <td style="color: var(--text-muted);">${item.distance_traveled}m</td>
+                        <td style="text-align: right; color: var(--neon-cyan); font-weight: 800;">${item.score}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            const sidebarRowsHtml = data.leaderboard.slice(0, 5).map((item, idx) => {
+                const rank = idx + 1;
+                const icon = rank === 1 ? '🥇' : (rank === 2 ? '🥈' : (rank === 3 ? '🥉' : `${rank}.`));
+                return `
+                    <tr>
+                        <td>${icon}</td>
+                        <td>${item.character_icon} ${item.player_name}</td>
+                        <td style="text-align: right; color: var(--neon-cyan); font-weight: 700;">${item.score}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            if (sidebarTbody) sidebarTbody.innerHTML = sidebarRowsHtml;
+            if (modalTbody) modalTbody.innerHTML = rowsHtml;
+        }
+
+        // Event listeners
+        window.addEventListener('user-profile-updated', () => updateUIAuthState());
+        window.addEventListener('user-auth-state', () => updateUIAuthState());
+
+        // Startup lifecycle
+        document.addEventListener('DOMContentLoaded', async () => {
+            updateUIAuthState();
+            refreshLeaderboard();
+            if (window.runnerApi.isAuthenticated()) {
+                await window.runnerApi.getProfile();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Leaderboard - CYBER RUNNER</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header class="arcade-header">
+        <div class="header-container">
+            <a href="/" class="logo-area">
+                <span class="logo-icon">⚡</span>
+                <div>
+                    <span class="logo-title">CYBER RUNNER</span>
+                    <span class="logo-badge">HALL OF FAME</span>
+                </div>
+            </a>
+            <div class="nav-actions">
+                <a href="/" class="btn btn-primary">
+                    <span>🎮</span> Play Game
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content" style="max-width: 960px;">
+        <div class="panel-card" style="width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h1 style="font-size: 24px; font-weight: 900; color: var(--neon-cyan);">
+                    🏆 GLOBAL HALL OF FAME
+                </h1>
+                <span style="font-size: 13px; color: var(--text-muted);">
+                    Top 50 All-Time High Scores
+                </span>
+            </div>
+
+            <table class="leaderboard-table">
+                <thead>
+                    <tr>
+                        <th style="width: 60px;">Rank</th>
+                        <th>Runner</th>
+                        <th>Character</th>
+                        <th>Coins</th>
+                        <th>Distance</th>
+                        <th style="text-align: right;">Score</th>
+                        <th style="text-align: right;">Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for score in top_scores %}
+                    <tr>
+                        <td>
+                            {% if forloop.counter == 1 %}
+                                <span class="rank-pill rank-1">🥇</span>
+                            {% elif forloop.counter == 2 %}
+                                <span class="rank-pill rank-2">🥈</span>
+                            {% elif forloop.counter == 3 %}
+                                <span class="rank-pill rank-3">🥉</span>
+                            {% else %}
+                                <span class="rank-pill">{{ forloop.counter }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong>
+                                {% if score.user %}
+                                    {{ score.user.username }}
+                                {% else %}
+                                    {{ score.guest_name|default:"Guest Runner" }}
+                                {% endif %}
+                            </strong>
+                        </td>
+                        <td>
+                            {% if score.character_used %}
+                                {{ score.character_used.icon_emoji }} {{ score.character_used.name }}
+                            {% else %}
+                                🏃 Retro Dash
+                            {% endif %}
+                        </td>
+                        <td style="color: var(--neon-gold); font-weight: 700;">🪙 {{ score.coins_collected }}</td>
+                        <td style="color: var(--text-muted);">{{ score.distance_traveled }}m</td>
+                        <td style="text-align: right; color: var(--neon-cyan); font-weight: 800; font-size: 16px;">
+                            {{ score.score }}
+                        </td>
+                        <td style="text-align: right; color: var(--text-muted); font-size: 12px;">
+                            {{ score.created_at|date:"M d, Y" }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                            No scores recorded yet. Be the first runner to enter the Hall of Fame!
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </main>
+</body>
+</html>
