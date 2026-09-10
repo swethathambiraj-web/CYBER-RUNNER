@@ -58,6 +58,10 @@ class GameScene extends Phaser.Scene {
         const width = this.cameras.main.width;
         const height = this.cameras.main.height;
 
+        // Ensure fixed static camera alignment (no zooming or horizontal shifting)
+        this.cameras.main.setZoom(1);
+        this.cameras.main.centerOn(width / 2, height / 2);
+
         // Load active character multipliers
         this.applyCharacterStats();
 
@@ -463,9 +467,8 @@ class GameScene extends Phaser.Scene {
         this.distText.setText(`DIST: ${Math.floor(this.distance)}m`);
         this.coinText.setText(`${this.coinsCollected}`);
 
-        // Scroll track and parallax skyline
+        // Pure vertical track scrolling (no horizontal shifting or zooming)
         this.track.tilePositionY -= this.gameSpeed * dt;
-        this.skyline.tilePositionX += 15 * dt;
 
         // 2. Manage Active Power-Up Timers
         let hasPowerUpChange = false;
